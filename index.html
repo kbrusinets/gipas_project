@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<style>
+  .popup {
+    position: relative;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: #333;
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    animation: fadein 1s;
+  }
+</style>
+<head>
+  <title>Docker Builder</title>
+</head>
+<body>
+  <h2>Enter Git URLs (one per line):</h2>
+  <form action="" onsubmit="sendUrl(event, this)">
+    <textarea id="urls" rows="10" cols="60"></textarea><br>
+    <button type="submit">Build</button>
+  </form>
+  <div id="images-container" style="display: flex; flex-direction: column; gap: 8px;"></div>
+  <div id="popup-container" style="
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 8px;
+  "></div>
+  <script>
+    const ws = new WebSocket("ws://" + location.host + "/ws");
+
+    function sendUrl(event, form) {{
+        event.preventDefault();
+        const textarea = form.urls.value;
+        form.reset();
+        const lines = textarea.split('\n').map(line => line.trim()).filter(line => line);
+        for (const line of lines) {
+          ws.send(line);
+        }
+    }};
+
+    function addImage(repo) {
+      if (!document.getElementById(repo)) {
+        const image = document.createElement("div");
+        image.id = repo
+        image.innerText = `${repo}: ⏳ Processing...`
+        document.getElementById("images-container").appendChild(image);
+      } else {
+        document.getElementById(repo).innerText = `${repo}: ⏳ Processing...`
+      }
+    }
+
+    function showPopup(message, bgColor) {
+      const popup = document.createElement("div");
+      popup.className = "popup";
+      popup.innerText = message;
+      popup.style.background = bgColor;
+      document.getElementById("popup-container").appendChild(popup);
+      setTimeout(() => popup.remove(), 4000);
+    }
+
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "handle") {
+        const color = msg.success ? "#27ae60" : "#c0392b";
+        const text = msg.success
+          ? `${msg.repo}: OK`
+          : `${msg.repo}: FAIL\n${msg.error.mess}`;
+        showPopup(text, color);
+        document.getElementById(msg.repo).innerText = msg.success ? `${msg.repo}: ✅ Success` : `${msg.repo}: ❌ Fail`
+      }
+      if (msg.type === "received") {
+        addImage(msg.repo)
+      }
+    };
+  </script>
+</body>
+</html>
